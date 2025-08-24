@@ -1,8 +1,6 @@
-using System;
 using System.Net;
 using Newtonsoft.Json;
 using NLog;
-using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Download.Clients.RQBit.ResponseModels;
 
@@ -88,7 +86,6 @@ namespace NzbDrone.Core.Download.Clients.RQBit
 
             return response.Details.InfoHash;
         }
-
 
         private HttpRequestBuilder BuildRequest(RQbitSettings settings)
         {
