@@ -1,12 +1,24 @@
 using FluentValidation;
 using NzbDrone.Core.Annotations;
+using NzbDrone.Core.ThingiProvider;
 using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Download.Clients.RQBit
 {
-    public class RQbitSettings : DownloadClientSettingsBase<RQbitSettings>
+    public class RQbitSettingsValidator : AbstractValidator<RQbitSettings>
     {
-        private static readonly RQbitSettingsValidator Validator = new();
+        public RQbitSettingsValidator()
+        {
+            RuleFor(c => c.Host).ValidHost();
+            RuleFor(c => c.Port).InclusiveBetween(1, 65535);
+
+            RuleFor(c => c.UrlBase).ValidUrlBase();
+        }
+    }
+
+    public class RQbitSettings : IProviderConfig
+    {
+        private static readonly RQbitSettingsValidator Validator = new RQbitSettingsValidator();
 
         public RQbitSettings()
         {
@@ -29,20 +41,9 @@ namespace NzbDrone.Core.Download.Clients.RQBit
         [FieldToken(TokenField.HelpText, "DownloadClientRQbitSettingsUrlBaseHelpText")]
         public string UrlBase { get; set; }
 
-        public override NzbDroneValidationResult Validate()
+        public NzbDroneValidationResult Validate()
         {
             return new NzbDroneValidationResult(Validator.Validate(this));
-        }
-    }
-
-    public class RQbitSettingsValidator : AbstractValidator<RQbitSettings>
-    {
-        public RQbitSettingsValidator()
-        {
-            RuleFor(c => c.Host).ValidHost();
-            RuleFor(c => c.Port).InclusiveBetween(1, 65535);
-
-            RuleFor(c => c.UrlBase).ValidUrlBase();
         }
     }
 }
