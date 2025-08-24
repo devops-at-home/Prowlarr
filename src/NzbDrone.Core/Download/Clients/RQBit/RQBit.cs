@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using FluentValidation.Results;
 using NLog;
 using NzbDrone.Common.Disk;
-using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Localization;
 using NzbDrone.Core.Parser.Model;
@@ -17,6 +14,7 @@ namespace NzbDrone.Core.Download.Clients.RQBit
         private readonly IRQbitProxy _proxy;
 
         public override string Name => "RQBit";
+        public override bool SupportsCategories => false;
 
         public RQBit(IRQbitProxy proxy,
             ITorrentFileInfoReader torrentFileInfoReader,
@@ -28,107 +26,6 @@ namespace NzbDrone.Core.Download.Clients.RQBit
             : base(torrentFileInfoReader, seedConfigProvider, configService, diskProvider, localizationService, logger)
         {
             _proxy = proxy;
-        }
-
-        public override IEnumerable<DownloadClientItem> GetItems()
-        {
-            var torrents = _proxy.GetTorrents(Settings);
-
-            _logger.Debug("Retrieved metadata of {0} torrents in client", torrents.Count);
-
-            var items = new List<DownloadClientItem>();
-            foreach (var torrent in torrents)
-            {
-                // Ignore torrents with an empty path
-                if (torrent.Path.IsNullOrWhiteSpace())
-                {
-                    _logger.Warn("Torrent '{0}' has an empty download path and will not be processed", torrent.Name);
-                    continue;
-                }
-
-                if (torrent.Path.StartsWith("."))
-                {
-                    _logger.Warn("Torrent '{0}' has a download path starting with '.' and will not be processed", torrent.Name);
-                    continue;
-                }
-
-                var item = new DownloadClientItem();
-                item.DownloadClientInfo = DownloadClientItemClientInfo.FromDownloadClient(this, false);
-                item.Title = torrent.Name;
-                item.DownloadId = torrent.Hash;
-                item.Message = torrent.Message;
-
-                item.OutputPath = new OsPath(torrent.Path);
-                item.TotalSize = torrent.TotalSize;
-                item.RemainingSize = torrent.RemainingSize;
-                item.SeedRatio = torrent.Ratio;
-
-                if (torrent.DownRate > 0)
-                {
-                    var secondsLeft = torrent.RemainingSize / torrent.DownRate;
-                    item.RemainingTime = TimeSpan.FromSeconds(secondsLeft);
-                }
-                else
-                {
-                    item.RemainingTime = TimeSpan.Zero;
-                }
-
-                if (torrent.IsFinished)
-                {
-                    item.Status = DownloadItemStatus.Completed;
-                }
-                else if (torrent.IsActive)
-                {
-                    item.Status = DownloadItemStatus.Downloading;
-                }
-                else if (!torrent.IsActive)
-                {
-                    item.Status = DownloadItemStatus.Paused;
-                }
-
-                // Get cached seedConfig for this torrent
-                var seedConfig = _seedConfigProvider.GetSeedConfiguration(torrent.Hash);
-
-                if (item.DownloadClientInfo.RemoveCompletedDownloads && torrent.IsFinished && seedConfig != null)
-                {
-                    var canRemove = false;
-
-                    if (torrent.Ratio / 1000.0 >= seedConfig.SeedRatio)
-                    {
-                        _logger.Trace($"{item} has met seed ratio goal of {seedConfig.SeedRatio}");
-                        canRemove = true;
-                    }
-                    else if (DateTimeOffset.Now - DateTimeOffset.FromUnixTimeSeconds(torrent.FinishedTime) >= seedConfig.SeedTime)
-                    {
-                        _logger.Trace($"{item} has met seed time goal of {seedConfig.SeedTime} minutes");
-                        canRemove = true;
-                    }
-                    else
-                    {
-                        _logger.Trace($"{item} seeding goals have not yet been reached");
-                    }
-
-                    // Check if torrent is finished and if it exceeds cached seedConfig
-                    item.CanMoveFiles = item.CanBeRemoved = canRemove;
-                }
-
-                items.Add(item);
-            }
-
-            return items;
-        }
-
-        public override void RemoveItem(DownloadClientItem item, bool deleteData)
-        {
-            _proxy.RemoveTorrent(item.DownloadId, deleteData, Settings);
-        }
-
-        public override DownloadClientInfo GetStatus()
-        {
-            return new DownloadClientInfo
-            {
-                IsLocalhost = Settings.Host == "127.0.0.1" || Settings.Host == "::1" || Settings.Host == "localhost",
-            };
         }
 
         protected override void Test(List<ValidationFailure> failures)
